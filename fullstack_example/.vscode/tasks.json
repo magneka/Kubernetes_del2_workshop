@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "debug: up",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/debug-up.sh",
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\debug-up.bat"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "debug: down",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/debug-down.sh",
+      "windows": {
+        "command": "${workspaceFolder}\\scripts\\debug-down.bat"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    }
+  ]
+}

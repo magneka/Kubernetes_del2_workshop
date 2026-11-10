@@ -1,0 +1,82 @@
+# =============================================================================
+# 05 - STATEFULSET: POSTGRESQL (Nextcloud's database)
+# =============================================================================
+# Why a StatefulSet and not a Deployment?
+#   * A Deployment treats Pods as identical and replaceable (random names).
+#   * A StatefulSet gives each Pod a stable name (postgres-0) and its own
+#     disk that follows it, even if the Pod moves to another node.
+# Databases need exactly that, so a StatefulSet is the usual choice.
+#
+#   kubectl get statefulset,pod -n eurostack -l app=postgres
+#   kubectl logs -n eurostack postgres-0
+# =============================================================================
+apiVersion: apps/v1                 # Workloads live in the "apps" API group.
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: eurostack
+spec:
+  serviceName: postgres             # The headless Service from 04.
+  replicas: 1                       # One database instance.
+  selector:
+    matchLabels:
+      app: postgres                 # Which Pods this StatefulSet manages...
+  template:                         # ...and the blueprint for those Pods.
+    metadata:
+      labels:
+        app: postgres               # Must match the selector above.
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine # Official image, small Alpine variant.
+          ports:
+            - containerPort: 5432
+              name: postgres
+          # envFrom loads EVERY key in the Secret as an environment variable:
+          # POSTGRES_DB, POSTGRES_USER and POSTGRES_PASSWORD.
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          env:
+            # New disks often contain a "lost+found" folder, and PostgreSQL
+            # refuses to start in a non-empty folder. A sub-folder avoids that.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-data   # Name from volumeClaimTemplates below.
+              mountPath: /var/lib/postgresql/data
+          # --- Resources ----------------------------------------------------
+          # requests = what the scheduler reserves for this Pod.
+          # limits   = the maximum it may use before it is throttled/killed.
+          resources:
+            requests:
+              cpu: 100m             # 100 millicores = 0.1 CPU.
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          # --- Health checks ------------------------------------------------
+          # readinessProbe: "Is it ready for traffic?" If not, the Service
+          #                 stops sending traffic to it.
+          # livenessProbe:  "Is it still alive?" If not, Kubernetes restarts
+          #                 the container.
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+  # A volumeClaimTemplate creates one PVC per replica automatically.
+  # The PVC gets the name "postgres-data-postgres-0". It is NOT deleted when
+  # you delete the StatefulSet, which protects your data.
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

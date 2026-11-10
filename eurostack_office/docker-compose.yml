@@ -1,0 +1,87 @@
+# =============================================================================
+# Euro-Office + Nextcloud + PostgreSQL with Docker Compose
+# =============================================================================
+# The same stack as the manifests in k8s/, for running on one machine
+# without Kubernetes.
+#
+#   cp .env.example .env      # then change the passwords
+#   docker compose up -d
+#   docker compose logs -f    # first start takes a few minutes
+#
+#   Nextcloud:   http://localhost:8080
+#   Euro-Office: http://localhost:8081  (opened by Nextcloud, not directly)
+#
+#   docker compose down       # stop, data is kept
+#   docker compose down -v    # stop and DELETE all data
+# =============================================================================
+
+name: eurostack
+
+services:
+  # --- PostgreSQL: Nextcloud's database (k8s/05) ----------------------------
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Euro-Office Document Server (k8s/06) ---------------------------------
+  euro-office:
+    image: ghcr.io/euro-office/documentserver:v9.3.1
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${JWT_SECRET:?set in .env}
+      ALLOW_PRIVATE_IP_ADDRESS: "true"   # Nextcloud is on a private IP.
+      EXAMPLE_ENABLED: "false"
+    ports:
+      - "${EURO_OFFICE_PORT:-8081}:80"
+    volumes:
+      - euro-office-data:/var/lib/euro-office/documentserver
+      - euro-office-logs:/var/log/euro-office/documentserver
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10m                  # First boot is slow (fonts etc.).
+
+  # --- Nextcloud file server (k8s/08) ---------------------------------------
+  nextcloud:
+    image: nextcloud:33-apache
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER:?set in .env}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD:?set in .env}
+      # localhost = browser, nextcloud = Euro-Office on the Compose network.
+      NEXTCLOUD_TRUSTED_DOMAINS: "localhost nextcloud"
+      # Read by the setup hook below.
+      EURO_OFFICE_JWT_SECRET: ${JWT_SECRET}
+      EURO_OFFICE_PUBLIC_URL: "http://localhost:${EURO_OFFICE_PORT:-8081}/"
+    ports:
+      - "${NEXTCLOUD_PORT:-8080}:80"
+    volumes:
+      - nextcloud-data:/var/www/html
+      - ./docker/hooks:/docker-entrypoint-hooks.d/post-installation:ro
+
+volumes:
+  postgres-data:
+  nextcloud-data:
+  euro-office-data:
+  euro-office-logs:

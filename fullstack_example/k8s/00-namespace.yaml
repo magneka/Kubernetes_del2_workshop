@@ -1,0 +1,5 @@
+# Namespace that holds all resources for the app.
+apiVersion: v1
+kind: Namespace  # isolated scope ("app") that groups all resources of this app
+metadata:
+  name: app

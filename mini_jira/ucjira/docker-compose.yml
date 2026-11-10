@@ -1,0 +1,34 @@
+# Quick local run without Kubernetes: docker compose up --build
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: minijira
+      MYSQL_USER: minijira
+      MYSQL_PASSWORD: minijira
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      retries: 20
+
+  app:
+    build: .
+    image: minijira:1.0.0
+    environment:
+      DB_HOST: mysql
+      DB_USER: minijira
+      DB_PASSWORD: minijira
+      GIT_WEBHOOK_SECRET: change-me-webhook-secret
+    ports:
+      - "9030:9029"   # host 9030: 9029 is used by the Kubernetes port-forward
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:

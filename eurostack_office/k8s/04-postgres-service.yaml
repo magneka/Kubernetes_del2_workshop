@@ -1,0 +1,30 @@
+# =============================================================================
+# 04 - SERVICE: POSTGRESQL
+# =============================================================================
+# Pods get a new IP address every time they restart, so you never connect to
+# a Pod's IP directly. A Service gives a STABLE name instead. Other Pods in
+# the namespace can simply connect to "postgres:5432".
+#
+# This is a "headless" Service (clusterIP: None). It does not load-balance:
+# DNS points straight at the Pod. StatefulSets (05) require a headless
+# Service so each replica gets its own stable DNS name, for example
+#   postgres-0.postgres.eurostack.svc.cluster.local
+#
+# The Service is created BEFORE the StatefulSet, because the StatefulSet
+# refers to it by name ("serviceName: postgres").
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres          # This becomes the DNS name: "postgres".
+  namespace: eurostack
+  labels:
+    app: postgres
+spec:
+  clusterIP: None         # None = headless Service.
+  selector:
+    app: postgres         # Send traffic to Pods that carry this label (05).
+  ports:
+    - name: postgres
+      port: 5432          # Port other Pods connect to.
+      targetPort: 5432    # Port the container listens on.

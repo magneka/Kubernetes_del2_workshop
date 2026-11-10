@@ -1,0 +1,46 @@
+# =============================================================================
+# 03 - PERSISTENT VOLUME CLAIMS (STORAGE)
+# =============================================================================
+# Containers are throw-away: when a Pod restarts, its filesystem is reset.
+# Anything that must survive a restart (uploaded files, documents) needs a
+# PersistentVolume.
+#
+# A PersistentVolumeClaim (PVC) is a REQUEST for storage: "I need 10 GiB".
+# The cluster's StorageClass then creates the actual disk (a
+# PersistentVolume) for us. Local clusters such as Docker Desktop, kind,
+# minikube and k3s all ship a default StorageClass that does this.
+#
+#   kubectl get pvc -n eurostack   # STATUS should become "Bound"
+#
+# The database (05) is not here. It uses a StatefulSet, which creates its
+# own PVC through a "volumeClaimTemplate".
+# =============================================================================
+
+# --- Nextcloud: program files, config and all user files --------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-data
+  namespace: eurostack
+spec:
+  accessModes:
+    - ReadWriteOnce     # Can be mounted read-write by ONE node at a time.
+                        # Fine for a single Nextcloud Pod.
+  # storageClassName: standard   # Leave out to use the cluster's default.
+  resources:
+    requests:
+      storage: 10Gi     # How much space we ask for.
+
+---
+# --- Euro-Office: document cache and working files --------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: euro-office-data
+  namespace: eurostack
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi

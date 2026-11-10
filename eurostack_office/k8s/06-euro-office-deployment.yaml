@@ -1,0 +1,113 @@
+# =============================================================================
+# 06 - DEPLOYMENT: EURO-OFFICE DOCUMENT SERVER
+# =============================================================================
+# Euro-Office is the online editor for documents, spreadsheets and
+# presentations. It does NOT store files itself. Nextcloud (08) stores the
+# files, and Euro-Office opens, edits and saves them back through Nextcloud.
+#
+# A Deployment keeps the requested number of Pods running. If a Pod crashes
+# or a node dies, the Deployment creates a new one.
+#
+# The image bundles its own small PostgreSQL, Redis and RabbitMQ inside the
+# container. That is fine for learning. In production you would run those
+# as separate services and point DB_HOST, REDIS_SERVER_HOST and AMQP_HOST
+# at them.
+#
+#   kubectl get pods -n eurostack -l app=euro-office -w   # watch it start
+#   kubectl logs -n eurostack deploy/euro-office -f       # follow the logs
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: euro-office
+  namespace: eurostack
+  labels:
+    app: euro-office
+spec:
+  replicas: 1             # The bundled database means we cannot simply
+                          # run 2+ copies. Keep this at 1.
+  strategy:
+    # "Recreate" stops the old Pod BEFORE starting the new one.
+    # Needed because the volumes are ReadWriteOnce and can only be used by
+    # one Pod at a time. The default, "RollingUpdate", would start a new Pod
+    # first, and it could hang waiting for the disk.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: euro-office
+  template:
+    metadata:
+      labels:
+        app: euro-office  # The Service (07) finds this Pod via this label.
+    spec:
+      containers:
+        - name: documentserver
+          # Pin an exact version. "latest" can change under your feet and
+          # makes it impossible to know what you are actually running.
+          image: ghcr.io/euro-office/documentserver:v9.3.1
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            # Require signed requests from Nextcloud.
+            - name: JWT_ENABLED
+              value: "true"       # Env values must be strings, so quote them.
+            # Read the secret value from the Secret in 01 instead of writing
+            # it here in plain text.
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: euro-office-jwt
+                  key: JWT_SECRET
+            # Nextcloud lives at a private cluster IP (10.x.x.x). Euro-Office
+            # blocks private addresses by default, so we allow them.
+            - name: ALLOW_PRIVATE_IP_ADDRESS
+              value: "true"
+            # Do not start the built-in demo/example app.
+            - name: EXAMPLE_ENABLED
+              value: "false"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/euro-office/documentserver
+            # We deliberately do NOT mount /etc/euro-office/documentserver
+            # or /var/log/euro-office/documentserver. A new, empty volume
+            # hides the files and folders that ship in the image at that
+            # path. For /etc the config files disappear; for /var/log the
+            # log folders (e.g. adminpanel/) disappear and supervisord
+            # refuses to start. Docker Compose does not have this problem
+            # because Docker copies the image's files into a new named
+            # volume; Kubernetes does not. Settings come from environment
+            # variables, and logs stay in the container (kubectl logs).
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 4Gi         # The editor is memory hungry.
+          # --- Health checks ------------------------------------------------
+          # startupProbe: Euro-Office takes a few minutes on first boot
+          # (it generates fonts and starts its internal services). Until this
+          # probe succeeds, the other probes are paused. Here: try every 10s,
+          # up to 60 times = 10 minutes before giving up.
+          startupProbe:
+            httpGet:
+              path: /healthcheck  # Returns "true" when the server is ready.
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+      # Connect the PVCs from 03 to the names used in volumeMounts above.
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: euro-office-data

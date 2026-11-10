@@ -1,0 +1,8 @@
+.env
+node_modules/
+dist/
+*.log
+.k8s-port-forward.pid
+.DS_Store
+backups/
+__debug_bin*

@@ -1,0 +1,100 @@
+# Secret "app-secrets" and ConfigMap "db-init" are created by the deploy scripts from .env and db/init.
+# Persistent volume claim for MySQL data, so the database survives pod restarts.
+apiVersion: v1
+kind: PersistentVolumeClaim  # requests 2Gi of persistent disk for the MySQL data
+metadata:
+  name: mysql-pvc
+  namespace: app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi # requests 2Gi of persistent storage for MySQL data
+---
+# MySQL deployment: single replica, initialized from the db-init ConfigMap on first start.
+apiVersion: apps/v1
+kind: Deployment  # runs and keeps the MySQL pod alive, restarting it if it fails
+metadata:
+  name: mysql
+  namespace: app
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_PASSWORD
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              memory: 1Gi
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h 127.0.0.1 -u root -p"$MYSQL_ROOT_PASSWORD"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+        - name: db-init
+          configMap:
+            name: db-init
+---
+# Internal-only (ClusterIP) service so the API can reach MySQL at mysql:3306.
+apiVersion: v1
+kind: Service  # gives MySQL a stable internal DNS name and port inside the cluster
+metadata:
+  name: mysql
+  namespace: app
+spec:
+  type: ClusterIP
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306

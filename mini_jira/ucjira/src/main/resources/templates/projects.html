@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Projects')}"></head>
+<body>
+<header th:replace="~{fragments :: topNav}"></header>
+<main>
+    <h1>Projects</h1>
+    <table class="table" th:unless="${#lists.isEmpty(projects)}">
+        <thead><tr><th>Key</th><th>Name</th><th>Lead</th><th>Issues</th></tr></thead>
+        <tbody>
+        <tr th:each="p : ${projects}">
+            <td><a th:href="@{/projects/{k}(k=${p.key})}" th:text="${p.key}">DEMO</a></td>
+            <td><a th:href="@{/projects/{k}(k=${p.key})}" th:text="${p.name}">Demo</a></td>
+            <td th:text="${p.lead?.displayName} ?: '–'">Admin</td>
+            <td th:text="${issueCounts[p.id]}">0</td>
+        </tr>
+        </tbody>
+    </table>
+    <p th:if="${#lists.isEmpty(projects)}">No projects yet.</p>
+
+    <h2>New project</h2>
+    <form th:action="@{/projects}" th:object="${form}" method="post" class="card form">
+        <div class="row">
+            <label>Key
+                <input th:field="*{key}" placeholder="e.g. WEB" maxlength="10" required>
+                <span class="field-error" th:errors="*{key}"></span>
+            </label>
+            <label class="grow">Name
+                <input th:field="*{name}" required>
+                <span class="field-error" th:errors="*{name}"></span>
+            </label>
+        </div>
+        <label>Description <textarea th:field="*{description}" rows="2"></textarea></label>
+        <button type="submit" class="btn primary">Create project</button>
+    </form>
+</main>
+<footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>

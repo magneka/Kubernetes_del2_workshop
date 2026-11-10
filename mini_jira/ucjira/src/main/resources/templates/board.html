@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${project.name})}"></head>
+<body>
+<header th:replace="~{fragments :: topNav}"></header>
+<main class="wide">
+    <div class="title-row">
+        <h1><span class="muted" th:text="${project.key}">DEMO</span> <span th:text="${project.name}">Demo</span></h1>
+        <a class="btn primary" th:href="@{/projects/{k}/issues/new(k=${project.key},sprintId=${sprint?.id})}">+ Create issue</a>
+    </div>
+    <nav th:replace="~{fragments :: projectTabs(${project}, 'board')}"></nav>
+
+    <div class="sprint-banner" th:if="${sprint}">
+        <div>
+            <strong th:text="${sprint.name}">Sprint 1</strong>
+            <span class="muted" th:text="${sprint.startDate} + ' → ' + ${sprint.endDate}">dates</span>
+            <span class="days-left" th:if="${sprint.daysLeft != null}"
+                  th:text="${sprint.daysLeft >= 0} ? ${sprint.daysLeft} + ' days left' : 'Overdue by ' + ${-sprint.daysLeft} + ' days'">10 days left</span>
+            <div class="goal" th:if="${sprint.goal}" th:text="${sprint.goal}">Goal</div>
+        </div>
+        <a class="btn" th:href="@{/projects/{k}/backlog(k=${project.key})}">Complete sprint…</a>
+    </div>
+    <p class="muted" th:unless="${sprint}">
+        No active sprint – showing all issues.
+        Plan and start a sprint under <a th:href="@{/projects/{k}/backlog(k=${project.key})}">Backlog &amp; sprints</a>.
+    </p>
+
+    <div class="board" data-dnd-root data-dnd-from="board">
+        <section class="column" th:each="col : ${columns}" data-drop-name="status" th:data-drop-value="${col.status}">
+            <h3><span th:text="${col.status.label}">To Do</span> <span class="count" th:text="${#lists.size(col.issues)}">0</span></h3>
+            <article class="issue-card" th:each="i : ${col.issues}" draggable="true"
+                     th:data-key="${i.key}" th:data-move-url="@{/issues/{k}/status(k=${i.key})}">
+                <a class="issue-title" draggable="false" th:href="@{/issues/{k}(k=${i.key})}" th:text="${i.title}">Title</a>
+                <div class="meta">
+                    <span th:replace="~{fragments :: type(${i.type})}"></span>
+                    <span th:replace="~{fragments :: prio(${i.priority})}"></span>
+                    <span class="points" th:if="${i.storyPoints}" title="Story points" th:text="${i.storyPoints}">3</span>
+                    <span class="key" th:text="${i.key}">DEMO-1</span>
+                </div>
+                <div class="meta">
+                    <span class="assignee" th:text="${i.assignee?.displayName} ?: 'Unassigned'">Unassigned</span>
+                    <span class="spacer"></span>
+                    <form th:if="${i.status.previous}" th:action="@{/issues/{k}/status(k=${i.key})}" method="post" class="inline">
+                        <input type="hidden" name="status" th:value="${i.status.previous}">
+                        <input type="hidden" name="from" value="board">
+                        <button class="btn small ghost" th:title="'Move to ' + ${i.status.previous.label}">&larr;</button>
+                    </form>
+                    <form th:if="${i.status.next}" th:action="@{/issues/{k}/status(k=${i.key})}" method="post" class="inline">
+                        <input type="hidden" name="status" th:value="${i.status.next}">
+                        <input type="hidden" name="from" value="board">
+                        <button class="btn small ghost" th:title="'Move to ' + ${i.status.next.label}">&rarr;</button>
+                    </form>
+                </div>
+            </article>
+        </section>
+    </div>
+</main>
+<footer th:replace="~{fragments :: footer}"></footer>
+<script th:src="@{/js/dnd.js}"></script>
+</body>
+</html>

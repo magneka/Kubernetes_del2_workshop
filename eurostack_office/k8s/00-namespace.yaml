@@ -1,0 +1,23 @@
+# =============================================================================
+# 00 - NAMESPACE
+# =============================================================================
+# A Namespace is a "folder" inside the cluster. Everything in this tutorial
+# lives in the "eurostack" namespace, so it is easy to look at and easy to
+# delete again:
+#
+#   kubectl get all -n eurostack        # see everything we created
+#   kubectl delete namespace eurostack  # remove everything in one go
+#
+# Files are numbered because "kubectl apply -f k8s/" applies them in
+# alphabetical order. The namespace must exist before anything is put in it,
+# so it gets number 00.
+# =============================================================================
+apiVersion: v1          # Core Kubernetes API group (v1 = stable).
+kind: Namespace         # The type of object we are creating.
+metadata:
+  name: eurostack       # The name every other file refers to.
+  labels:
+    # Labels are free-form key/value tags. They do nothing by themselves,
+    # but you can filter on them:
+    #   kubectl get ns -l app.kubernetes.io/part-of=eurostack
+    app.kubernetes.io/part-of: eurostack

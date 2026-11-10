@@ -1,0 +1,51 @@
+# All environment specific values come from environment variables,
+# which Kubernetes fills in from the ConfigMap and Secret (see k8s/).
+spring:
+  application:
+    name: minijira
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:minijira}
+    username: ${DB_USER:minijira}
+    password: ${DB_PASSWORD:minijira}
+  jpa:
+    open-in-view: true
+    hibernate:
+      ddl-auto: none # schema is owned by Flyway (src/main/resources/db/migration)
+  session:
+    # HTTP sessions are stored in MySQL so any pod can serve any user
+    jdbc:
+      initialize-schema: never
+    timeout: 30m
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  mvc:
+    format:
+      date: iso # <input type="date"> sends yyyy-MM-dd
+
+server:
+  port: 9029
+  shutdown: graceful
+  forward-headers-strategy: framework
+  error:
+    include-message: always # show e.g. "Complete the active sprint first" on the error page
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+
+app:
+  admin-password: ${ADMIN_PASSWORD:admin}
+  version: ${APP_VERSION:1.0.0}
+  time-zone: ${APP_TIME_ZONE:Europe/Oslo}
+  git:
+    # Shared secret for the GitHub/GitLab push webhook (POST /api/git/webhook). Empty = webhook disabled.
+    webhook-secret: ${GIT_WEBHOOK_SECRET:}

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${issue == null} ? 'Create issue' : 'Edit ' + ${issue.key})}"></head>
+<body>
+<header th:replace="~{fragments :: topNav}"></header>
+<main>
+    <p class="crumbs">
+        <a th:href="@{/projects/{k}(k=${project.key})}" th:text="${project.name}">Project</a>
+        <th:block th:if="${issue != null}"> / <a th:href="@{/issues/{k}(k=${issue.key})}" th:text="${issue.key}">DEMO-1</a></th:block>
+    </p>
+    <h1 th:text="${issue == null} ? 'Create issue' : 'Edit ' + ${issue.key}">Create issue</h1>
+
+    <form th:action="${issue == null} ? @{/projects/{k}/issues(k=${project.key})} : @{/issues/{k}(k=${issue.key})}"
+          th:object="${form}" method="post" class="card form">
+        <label>Summary
+            <input th:field="*{title}" maxlength="200" autofocus required>
+            <span class="field-error" th:errors="*{title}"></span>
+        </label>
+        <label>Description <textarea th:field="*{description}" rows="6"></textarea></label>
+        <div class="row">
+            <label>Type
+                <select th:field="*{type}">
+                    <option th:each="t : ${types}" th:value="${t}" th:text="${t.label}"></option>
+                </select>
+            </label>
+            <label>Priority
+                <select th:field="*{priority}">
+                    <option th:each="p : ${priorities}" th:value="${p}" th:text="${p.label}"></option>
+                </select>
+            </label>
+            <label>Status
+                <select th:field="*{status}">
+                    <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"></option>
+                </select>
+            </label>
+            <label>Assignee
+                <select th:field="*{assigneeId}">
+                    <option value="">Unassigned</option>
+                    <option th:each="u : ${users}" th:value="${u.id}" th:text="${u.displayName}"></option>
+                </select>
+            </label>
+        </div>
+        <div class="row">
+            <label>Sprint
+                <select th:field="*{sprintId}">
+                    <option value="">Backlog</option>
+                    <option th:each="s : ${sprints}" th:value="${s.id}" th:text="${s.name} + ' (' + ${s.status.label} + ')'"></option>
+                </select>
+            </label>
+            <label>Story points
+                <input type="number" th:field="*{storyPoints}" min="0" max="100">
+                <span class="field-error" th:errors="*{storyPoints}"></span>
+            </label>
+        </div>
+        <button type="submit" class="btn primary" th:text="${issue == null} ? 'Create' : 'Save'">Create</button>
+    </form>
+</main>
+<footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>

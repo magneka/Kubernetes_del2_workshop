@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Git post-commit hook: sends the new commit to UCJira's webhook, signed like a GitHub push event.
+# Any issue key in the message (e.g. DEMO-4) gets the commit linked; "Fixes DEMO-4" also moves it to Done.
+#
+# Install in any git repository:
+#   cp ucjira/git-hooks/post-commit <repo>/.git/hooks/post-commit
+#
+# Settings (environment variables or `git config`):
+#   UCJIRA_URL             default http://localhost:9029/api/git/webhook   (git config ucjira.url)
+#   UCJIRA_WEBHOOK_SECRET  default change-me-webhook-secret                (git config ucjira.secret)
+#
+# The hook never blocks a commit: if UCJira can't be reached it just prints a warning.
+
+URL="${UCJIRA_URL:-$(git config ucjira.url || echo http://localhost:9029/api/git/webhook)}"
+SECRET="${UCJIRA_WEBHOOK_SECRET:-$(git config ucjira.secret || echo change-me-webhook-secret)}"
+
+json_escape() {
+  # escape backslash, quote and control characters; join lines with \n
+  sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/\r//g' | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }'
+}
+
+SHA=$(git rev-parse HEAD)
+MESSAGE=$(git log -1 --format=%B | json_escape)
+AUTHOR=$(git log -1 --format=%an | json_escape)
+TIMESTAMP=$(git log -1 --format=%aI)
+REPO=$(basename "$(git rev-parse --show-toplevel)")
+
+# Link to the commit on GitHub/GitLab if origin points there
+COMMIT_URL=""
+ORIGIN=$(git remote get-url origin 2>/dev/null)
+if [ -n "$ORIGIN" ]; then
+  WEB=$(echo "$ORIGIN" | sed -E 's#^git@([^:]+):#https://\1/#; s#^ssh://git@([^/]+)/#https://\1/#; s#\.git$##')
+  case "$WEB" in
+    https://github.com/*) COMMIT_URL="$WEB/commit/$SHA"; REPO="${WEB#https://github.com/}" ;;
+    https://gitlab.com/*) COMMIT_URL="$WEB/-/commit/$SHA"; REPO="${WEB#https://gitlab.com/}" ;;
+  esac
+fi
+
+PAYLOAD=$(printf '{"repository":{"full_name":"%s"},"commits":[{"id":"%s","message":"%s","timestamp":"%s","url":"%s","author":{"name":"%s"}}]}' \
+  "$REPO" "$SHA" "$MESSAGE" "$TIMESTAMP" "$COMMIT_URL" "$AUTHOR")
+SIGNATURE="sha256=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')"
+
+RESPONSE=$(curl -s -m 5 -w ' (HTTP %{http_code})' -X POST "$URL" \
+  -H 'Content-Type: application/json' \
+  -H 'X-GitHub-Event: push' \
+  -H "X-Hub-Signature-256: $SIGNATURE" \
+  --data-binary "$PAYLOAD") || RESPONSE="could not reach $URL"
+echo "UCJira: $RESPONSE"
+exit 0

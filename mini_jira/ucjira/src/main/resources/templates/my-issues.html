@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('My issues')}"></head>
+<body>
+<header th:replace="~{fragments :: topNav}"></header>
+<main>
+    <h1>My open issues</h1>
+    <table class="table" th:unless="${#lists.isEmpty(issues)}">
+        <thead><tr><th>Key</th><th>Summary</th><th>Type</th><th>Priority</th><th>Status</th></tr></thead>
+        <tbody>
+        <tr th:each="i : ${issues}">
+            <td><a th:href="@{/issues/{k}(k=${i.key})}" th:text="${i.key}">DEMO-1</a></td>
+            <td><a th:href="@{/issues/{k}(k=${i.key})}" th:text="${i.title}">Title</a></td>
+            <td><span th:replace="~{fragments :: type(${i.type})}"></span></td>
+            <td><span th:replace="~{fragments :: prio(${i.priority})}"></span></td>
+            <td><span th:replace="~{fragments :: status(${i.status})}"></span></td>
+        </tr>
+        </tbody>
+    </table>
+    <p th:if="${#lists.isEmpty(issues)}">Nothing assigned to you. 🎉</p>
+</main>
+<footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>

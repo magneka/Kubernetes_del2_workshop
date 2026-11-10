@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${issue.key})}"></head>
+<body>
+<header th:replace="~{fragments :: topNav}"></header>
+<main>
+    <p class="crumbs">
+        <a th:href="@{/projects/{k}(k=${issue.project.key})}" th:text="${issue.project.name}">Project</a> /
+        <span th:text="${issue.key}">DEMO-1</span>
+    </p>
+    <div class="title-row">
+        <h1 th:text="${issue.title}">Title</h1>
+        <div class="actions">
+            <a class="btn" th:href="@{/issues/{k}/edit(k=${issue.key})}">Edit</a>
+            <form th:action="@{/issues/{k}/delete(k=${issue.key})}" method="post" class="inline"
+                  onsubmit="return confirm('Delete this issue?')">
+                <button class="btn danger">Delete</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="issue-layout">
+        <div>
+            <section class="card">
+                <h3>Description</h3>
+                <p class="description" th:text="${issue.description} ?: 'No description.'">...</p>
+            </section>
+
+            <section class="card">
+                <h3>Commits</h3>
+                <ul class="commits" th:unless="${#lists.isEmpty(commits)}">
+                    <li th:each="c : ${commits}">
+                        <a th:if="${c.url}" class="sha" th:href="${c.url}" target="_blank" rel="noopener" th:text="${c.shortSha}">abc1234</a>
+                        <code th:unless="${c.url}" class="sha" th:text="${c.shortSha}">abc1234</code>
+                        <span class="commit-msg" th:text="${c.summary}">Message</span>
+                        <span class="muted small">
+                            <th:block th:text="${c.author} ?: ''"></th:block>
+                            <th:block th:if="${c.repository}" th:text="' · ' + ${c.repository}"></th:block>
+                            <th:block th:text="' · ' + ${@fmt.dateTime(c.committedAt ?: c.createdAt)}"></th:block>
+                        </span>
+                        <form th:action="@{/issues/{k}/commits/{id}/delete(k=${issue.key},id=${c.id})}" method="post" class="inline">
+                            <button class="btn small ghost" title="Remove link">&times;</button>
+                        </form>
+                    </li>
+                </ul>
+                <p class="muted small">
+                    Mention <code th:text="${issue.key}">DEMO-1</code> in a commit message to link it automatically
+                    (<code th:text="'Fixes ' + ${issue.key}">Fixes DEMO-1</code> also moves the issue to Done), or link a commit by hand:
+                </p>
+                <form th:action="@{/issues/{k}/commits(k=${issue.key})}" method="post" class="row commit-form">
+                    <input name="sha" placeholder="Commit SHA" pattern="[0-9a-fA-F]{7,64}" title="7-64 hex characters" required>
+                    <input name="message" placeholder="Message (optional)" class="grow">
+                    <input name="url" type="url" placeholder="https://github.com/…/commit/… (optional)" class="grow">
+                    <button class="btn">Link commit</button>
+                </form>
+            </section>
+
+            <section class="card">
+                <h3>Comments</h3>
+                <div class="comment" th:each="c : ${comments}">
+                    <div class="comment-head">
+                        <strong th:text="${c.author.displayName}">Author</strong>
+                        <span class="muted" th:text="${@fmt.dateTime(c.createdAt)}">date</span>
+                    </div>
+                    <p th:text="${c.body}">Body</p>
+                </div>
+                <p class="muted" th:if="${#lists.isEmpty(comments)}">No comments yet.</p>
+                <form th:action="@{/issues/{k}/comments(k=${issue.key})}" method="post" class="form">
+                    <textarea name="body" rows="3" placeholder="Add a comment…" required></textarea>
+                    <button class="btn primary">Comment</button>
+                </form>
+            </section>
+        </div>
+
+        <aside class="card details">
+            <dl>
+                <dt>Status</dt>
+                <dd>
+                    <form th:action="@{/issues/{k}/status(k=${issue.key})}" method="post" class="inline">
+                        <select name="status" onchange="this.form.submit()">
+                            <option th:each="s : ${statuses}" th:value="${s}" th:text="${s.label}"
+                                    th:selected="${s == issue.status}"></option>
+                        </select>
+                    </form>
+                </dd>
+                <dt>Type</dt><dd><span th:replace="~{fragments :: type(${issue.type})}"></span></dd>
+                <dt>Priority</dt><dd><span th:replace="~{fragments :: prio(${issue.priority})}"></span></dd>
+                <dt>Sprint</dt>
+                <dd>
+                    <a th:if="${issue.sprint}" th:href="@{/projects/{k}/backlog(k=${issue.project.key})}" th:text="${issue.sprint.name}">Sprint 1</a>
+                    <span th:unless="${issue.sprint}" class="muted">Backlog</span>
+                </dd>
+                <dt>Points</dt><dd th:text="${issue.storyPoints} ?: '–'"></dd>
+                <dt>Assignee</dt><dd th:text="${issue.assignee?.displayName} ?: 'Unassigned'"></dd>
+                <dt>Reporter</dt><dd th:text="${issue.reporter.displayName}"></dd>
+                <dt>Created</dt><dd th:text="${@fmt.dateTime(issue.createdAt)}"></dd>
+                <dt>Updated</dt><dd th:text="${@fmt.dateTime(issue.updatedAt)}"></dd>
+            </dl>
+        </aside>
+    </div>
+</main>
+<footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>

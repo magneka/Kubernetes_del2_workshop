@@ -1,0 +1,26 @@
+# =============================================================================
+# 09 - SERVICE: NEXTCLOUD
+# =============================================================================
+# Stable internal address for Nextcloud:
+#   http://nextcloud.eurostack.svc.cluster.local
+#
+# Euro-Office uses this address as "StorageUrl" (see 02) to download a
+# document when it is opened and to save it back when you are done.
+#
+# Browsers reach Nextcloud through the Ingress (10) at http://cloud.localhost
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+  namespace: eurostack
+  labels:
+    app: nextcloud
+spec:
+  type: ClusterIP
+  selector:
+    app: nextcloud        # Matches the Pod label in 08.
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

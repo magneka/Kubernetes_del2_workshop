@@ -1,0 +1,88 @@
+# Separate volume for backups, so losing mysql-pvc does not also lose the backups.
+apiVersion: v1
+kind: PersistentVolumeClaim  # requests 1Gi of persistent disk for the SQL dumps
+metadata:
+  name: mysql-backup-pvc
+  namespace: app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Every 10 minutes: dump all databases to a gzip file, then keep only the 3 newest.
+apiVersion: batch/v1
+kind: CronJob  # runs the backup on a schedule
+metadata:
+  name: mysql-backup
+  namespace: app
+spec:
+  schedule: "*/10 * * * *" # every 10 minutes
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: mysql-backup
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: dump
+              image: mysql:8.4
+              env:
+                - name: MYSQL_PWD
+                  valueFrom:
+                    secretKeyRef:
+                      name: app-secrets
+                      key: MYSQL_ROOT_PASSWORD
+              command: ["bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  cd /backup
+                  f="db-$(date +%Y%m%d-%H%M%S).sql.gz"
+                  # Write to a temp name first so a failed dump never counts as a backup.
+                  mysqldump -h mysql -u root --single-transaction --routines --triggers --events --all-databases | gzip > "$f.tmp"
+                  mv "$f.tmp" "$f"
+                  rm -f ./*.tmp
+                  for old in $(ls -1t db-*.sql.gz | tail -n +4); do rm -f -- "$old"; done
+                  ls -l /backup
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: mysql-backup-pvc
+---
+# The default-deny policy blocks the backup pod, so allow it to reach MySQL on port 3306.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy  # firewall rule: lets the backup job reach MySQL
+metadata:
+  name: mysql-allow-from-backup
+  namespace: app
+spec:
+  podSelector:
+    matchLabels:
+      app: mysql
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: mysql-backup
+      ports:
+        - protocol: TCP
+          port: 3306

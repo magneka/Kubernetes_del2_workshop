@@ -1,0 +1,62 @@
+# =============================================================================
+# 02 - CONFIGMAP: NEXTCLOUD SETUP SCRIPT
+# =============================================================================
+# A ConfigMap holds NON-secret configuration: settings, config files, or
+# scripts. Here it holds a shell script that is mounted into the Nextcloud
+# container as a file (see the "volumes" section in 08).
+#
+# The official Nextcloud image runs every script in this folder once,
+# right after the first installation has finished:
+#   /docker-entrypoint-hooks.d/post-installation/
+#
+# Our script installs the Euro-Office connector app and tells it where the
+# Document Server is, so you do not have to click through the admin UI.
+#
+# Note: the script only runs on the FIRST install. If you change a URL later,
+# run the same occ commands with "kubectl exec" (see README.md).
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nextcloud-hooks
+  namespace: eurostack
+data:
+  # Each key under "data" becomes one file when the ConfigMap is mounted.
+  # The "|" means "multi-line text, keep the line breaks".
+  10-setup-euro-office.sh: |
+    #!/bin/sh
+    set -e
+    OCC="php /var/www/html/occ"
+
+    echo ">>> Installing the Euro-Office connector app (app id: eurooffice)"
+    $OCC app:install eurooffice || $OCC app:enable eurooffice
+
+    # The THREE addresses the connector needs. This is the part people most
+    # often get wrong, so read it carefully:
+    #
+    # 1. DocumentServerUrl - the address the USER'S BROWSER uses to load the
+    #    editor. It goes through the Ingress (10), so it is a public hostname.
+    $OCC config:app:set eurooffice DocumentServerUrl \
+      --value="http://office.localhost/"
+
+    # 2. DocumentServerInternalUrl - the address NEXTCLOUD uses to talk to
+    #    Euro-Office inside the cluster. This is the Service name from 07.
+    #    Format: http://<service>.<namespace>.svc.cluster.local/
+    $OCC config:app:set eurooffice DocumentServerInternalUrl \
+      --value="http://euro-office.eurostack.svc.cluster.local/"
+
+    # 3. StorageUrl - the address EURO-OFFICE uses to download and save
+    #    files in Nextcloud. This is the Service name from 09.
+    $OCC config:app:set eurooffice StorageUrl \
+      --value="http://nextcloud.eurostack.svc.cluster.local/"
+
+    # The shared JWT secret. EURO_OFFICE_JWT_SECRET comes from Secret 3 in
+    # 01, injected as an environment variable in 08.
+    $OCC config:app:set eurooffice jwt_secret \
+      --value="$EURO_OFFICE_JWT_SECRET"
+
+    # Cluster IPs are private addresses (10.x.x.x). Nextcloud refuses to
+    # contact private addresses unless we explicitly allow it.
+    $OCC config:system:set allow_local_remote_servers --type=boolean --value=true
+
+    echo ">>> Euro-Office connector configured"

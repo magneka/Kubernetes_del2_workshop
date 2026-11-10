@@ -1,0 +1,5 @@
+{
+  // Tools (dlv, gopls) are preinstalled in the image at versions compatible with its Go toolchain.
+  "go.toolsManagement.autoUpdate": false,
+  "go.toolsManagement.checkForUpdates": "off"
+}

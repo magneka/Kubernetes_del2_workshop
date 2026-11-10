@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:fragment="head(title)">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title} + ' · MiniJira'">MiniJira</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+
+<header th:fragment="topNav" class="topbar">
+    <a class="brand" th:href="@{/}">
+        <img th:src="@{/images/ulriken-logo.svg}" alt="Ulriken">
+        <span class="app-name">MiniJira</span>
+    </a>
+    <nav sec:authorize="isAuthenticated()">
+        <a th:href="@{/projects}" th:classappend="${#strings.startsWith(currentPath, '/projects') or #strings.startsWith(currentPath, '/issues')} ? 'active'">Projects</a>
+        <a th:href="@{/my-issues}" th:classappend="${currentPath == '/my-issues'} ? 'active'">My issues</a>
+    </nav>
+    <div class="spacer"></div>
+    <span sec:authorize="isAuthenticated()" class="who" th:text="${currentUserName}">User</span>
+    <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="inline">
+        <button type="submit" class="btn small ghost">Log out</button>
+    </form>
+</header>
+
+<footer th:fragment="footer" class="footer">
+    Served by pod <code th:text="${podName}">local</code> · version <span th:text="${appVersion}">1.0.0</span>
+</footer>
+
+<span th:fragment="prio(p)" th:class="'badge prio-' + ${#strings.toLowerCase(p.name())}" th:text="${p.label}">Medium</span>
+<span th:fragment="type(t)" th:class="'badge type-' + ${#strings.toLowerCase(t.name())}" th:text="${t.label}">Task</span>
+<span th:fragment="status(s)" th:class="'badge status-' + ${#strings.toLowerCase(s.name())}" th:text="${s.label}">To Do</span>
+<span th:fragment="sprintStatus(s)" th:class="'badge sprint-' + ${#strings.toLowerCase(s.name())}" th:text="${s.label}">Active</span>
+
+<!-- Board / Backlog tabs on project pages -->
+<nav th:fragment="projectTabs(project, active)" class="tabs">
+    <a th:href="@{/projects/{k}(k=${project.key})}" th:classappend="${active == 'board'} ? 'active'">Board</a>
+    <a th:href="@{/projects/{k}/backlog(k=${project.key})}" th:classappend="${active == 'backlog'} ? 'active'">Backlog &amp; sprints</a>
+</nav>
+
+<!-- One issue in the backlog / a sprint. Draggable between sprints; the select is the non-drag fallback. -->
+<li th:fragment="backlogRow(i)" class="issue-row" draggable="true" th:data-move-url="@{/issues/{k}/sprint(k=${i.key})}" th:data-key="${i.key}">
+    <span th:replace="~{fragments :: type(${i.type})}"></span>
+    <a class="row-key" draggable="false" th:href="@{/issues/{k}(k=${i.key})}" th:text="${i.key}">DEMO-1</a>
+    <a class="row-title" draggable="false" th:href="@{/issues/{k}(k=${i.key})}" th:text="${i.title}">Title</a>
+    <span th:replace="~{fragments :: status(${i.status})}"></span>
+    <span th:replace="~{fragments :: prio(${i.priority})}"></span>
+    <span class="assignee" th:text="${i.assignee?.displayName} ?: 'Unassigned'">Unassigned</span>
+    <span class="points" title="Story points" th:text="${i.storyPoints} ?: '–'">3</span>
+    <form th:action="@{/issues/{k}/sprint(k=${i.key})}" method="post" class="inline">
+        <input type="hidden" name="from" value="backlog">
+        <select name="sprintId" onchange="this.form.submit()" title="Move to sprint">
+            <option value="" th:selected="${i.sprint == null}">Backlog</option>
+            <option th:each="v : ${sprintViews}" th:value="${v.sprint.id}" th:text="${v.sprint.name}"
+                    th:selected="${i.sprint != null and i.sprint.id == v.sprint.id}"></option>
+        </select>
+    </form>
+</li>
+
+</body>
+</html>

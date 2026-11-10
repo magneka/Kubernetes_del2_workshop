@@ -1,0 +1,51 @@
+# Nginx deployment: serves the React build and proxies /api to the API service.
+apiVersion: apps/v1
+kind: Deployment  # runs and keeps the nginx pod alive, restarting it if it fails
+metadata:
+  name: nginx
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: k8sexp-nginx
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+# LoadBalancer service exposing nginx on port 8083 (forwarded to nginx port 80). The only externally reachable service.
+# Port 8083, not 80: on Docker Desktop a LoadBalancer binds localhost:<port>, and port 80 is taken by the
+# ingress-nginx controller used by eurostack_office. 8080-8082 are used by the Docker setups.
+apiVersion: v1
+kind: Service  # exposes nginx outside the cluster through a load balancer
+metadata:
+  name: nginx
+  namespace: app
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+    - port: 8083
+      targetPort: 80

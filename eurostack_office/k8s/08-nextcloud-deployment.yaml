@@ -1,0 +1,122 @@
+# =============================================================================
+# 08 - DEPLOYMENT: NEXTCLOUD (the self-hosted file server)
+# =============================================================================
+# Nextcloud is open-source file server software. Here it runs as a container
+# INSIDE YOUR OWN CLUSTER, and all files are stored on your own volume (03).
+# No external cloud service is involved.
+#
+# Nextcloud stores the files, manages users and sharing, and shows the web
+# interface. When you click a document, Nextcloud asks Euro-Office (06) to
+# open it in the editor.
+#
+# On the first start, the image:
+#   1. copies Nextcloud into /var/www/html (our PVC),
+#   2. installs it using the database (05) and admin user (01),
+#   3. runs our setup script from the ConfigMap (02).
+# This takes a few minutes. Follow along with:
+#   kubectl logs -n eurostack deploy/nextcloud -f
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud
+  namespace: eurostack
+  labels:
+    app: nextcloud
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # ReadWriteOnce volume, see the comment in 06.
+  selector:
+    matchLabels:
+      app: nextcloud
+  template:
+    metadata:
+      labels:
+        app: nextcloud
+    spec:
+      containers:
+        - name: nextcloud
+          # The Euro-Office connector requires Nextcloud 33 or newer.
+          # "apache" = image with a built-in Apache web server on port 80.
+          image: nextcloud:33-apache
+          ports:
+            - containerPort: 80
+              name: http
+          # Load all keys from two Secrets as environment variables.
+          envFrom:
+            - secretRef:
+                name: postgres-credentials   # POSTGRES_DB/USER/PASSWORD
+            - secretRef:
+                name: nextcloud-admin        # NEXTCLOUD_ADMIN_USER/PASSWORD
+          env:
+            # Where the database is: the Service name from 04.
+            - name: POSTGRES_HOST
+              value: postgres
+            # Hostnames Nextcloud accepts requests for (space-separated).
+            #   cloud.localhost  -> browsers, through the Ingress (10)
+            #   nextcloud...     -> Euro-Office and health checks,
+            #                       through the Service (09)
+            - name: NEXTCLOUD_TRUSTED_DOMAINS
+              value: "cloud.localhost nextcloud nextcloud.eurostack.svc.cluster.local"
+            # Trust the Ingress controller's forwarded headers. Pod IPs in
+            # local clusters are in these private ranges.
+            - name: TRUSTED_PROXIES
+              value: "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
+            # Same JWT secret as Euro-Office, used by the setup script (02).
+            - name: EURO_OFFICE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: euro-office-jwt
+                  key: JWT_SECRET
+          volumeMounts:
+            # All of Nextcloud: code, config.php and user files.
+            - name: nextcloud-data
+              mountPath: /var/www/html
+            # Our setup script, mounted into the image's hook folder.
+            - name: hooks
+              mountPath: /docker-entrypoint-hooks.d/post-installation
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          # --- Health checks ------------------------------------------------
+          # status.php returns JSON once Nextcloud is running.
+          # We send a "Host" header with a trusted domain. Without it, the
+          # probe would use the Pod IP, which Nextcloud does not trust.
+          startupProbe:
+            httpGet:
+              path: /status.php
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: nextcloud
+            periodSeconds: 10
+            failureThreshold: 60   # Allow up to 10 minutes for first install.
+          readinessProbe:
+            httpGet:
+              path: /status.php
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: nextcloud
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /status.php
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: nextcloud
+            periodSeconds: 30
+            failureThreshold: 5
+      volumes:
+        - name: nextcloud-data
+          persistentVolumeClaim:
+            claimName: nextcloud-data       # PVC from 03.
+        - name: hooks
+          configMap:
+            name: nextcloud-hooks           # ConfigMap from 02.
+            defaultMode: 0755               # Make the script executable.

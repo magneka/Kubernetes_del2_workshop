@@ -1,0 +1,72 @@
+# Defense in depth: Services already keep mysql/api internal (ClusterIP),
+# these policies also block other pods in the cluster from reaching them.
+# Allowed flows: anyone -> nginx:80, nginx -> api:8080, api -> mysql:3306.
+# Deny all incoming traffic to every pod in the namespace unless another policy allows it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy  # firewall rule: blocks all incoming pod traffic by default
+metadata:
+  name: default-deny-ingress
+  namespace: app
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Allow traffic from anywhere to nginx on port 80.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy  # firewall rule: lets anyone reach nginx on port 80
+metadata:
+  name: nginx-allow-external
+  namespace: app
+spec:
+  podSelector:
+    matchLabels:
+      app: nginx
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 80
+---
+# Allow only nginx pods to reach the API on port 8080.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy  # firewall rule: lets only nginx reach the API
+metadata:
+  name: api-allow-from-nginx
+  namespace: app
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Allow only API pods to reach MySQL on port 3306.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy  # firewall rule: lets only the API reach MySQL
+metadata:
+  name: mysql-allow-from-api
+  namespace: app
+spec:
+  podSelector:
+    matchLabels:
+      app: mysql
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api
+      ports:
+        - protocol: TCP
+          port: 3306

@@ -1,0 +1,59 @@
+# =============================================================================
+# 10 - INGRESS: ACCESS FROM THE BROWSER
+# =============================================================================
+# Services of type ClusterIP are only reachable inside the cluster. An
+# Ingress is the "front door": it routes HTTP traffic from outside to the
+# right Service, based on the hostname in the request.
+#
+#   http://cloud.localhost   -> Service nextcloud   (09)
+#   http://office.localhost  -> Service euro-office (07)
+#
+# An Ingress is only a set of RULES. Something must carry them out: an
+# Ingress CONTROLLER. This file assumes ingress-nginx. Install it first
+# (see README.md). On k3s or Rancher Desktop, Traefik is built in: change
+# ingressClassName to "traefik" and remove the nginx annotations.
+#
+# Why *.localhost? Modern browsers send any "*.localhost" name to
+# 127.0.0.1 automatically, so no DNS or hosts-file changes are needed.
+#
+# This tutorial uses plain HTTP. For real use, add a "tls:" section and a
+# certificate (for example with cert-manager).
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eurostack
+  namespace: eurostack
+  annotations:
+    # Allow large file uploads to Nextcloud (the default is only 1 MB).
+    nginx.ingress.kubernetes.io/proxy-body-size: "1g"
+    # The editor keeps a WebSocket open while you type. Raise the timeouts
+    # so long editing sessions are not cut off after 60 seconds.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx     # Which Ingress controller handles this.
+  rules:
+    # --- Rule 1: Nextcloud ----------------------------------------------
+    - host: cloud.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix      # Match "/" and everything below it.
+            backend:
+              service:
+                name: nextcloud
+                port:
+                  name: http
+    # --- Rule 2: Euro-Office --------------------------------------------
+    # Must match DocumentServerUrl in the setup script (02).
+    - host: office.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: euro-office
+                port:
+                  name: http

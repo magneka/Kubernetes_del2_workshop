@@ -1,0 +1,12 @@
+FROM golang:1.23
+
+# Pinned: newer dlv/gopls releases require a newer Go toolchain than this image.
+RUN go install github.com/go-delve/delve/cmd/dlv@v1.24.2 \
+ && go install golang.org/x/tools/gopls@v0.16.2
+
+WORKDIR /app
+
+COPY src/go.mod src/go.sum* ./
+RUN go mod download
+
+EXPOSE 8080

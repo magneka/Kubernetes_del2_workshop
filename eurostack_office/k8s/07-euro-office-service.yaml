@@ -1,0 +1,33 @@
+# =============================================================================
+# 07 - SERVICE: EURO-OFFICE
+# =============================================================================
+# Gives Euro-Office a stable internal address. Inside the cluster it can be
+# reached at any of these names:
+#   http://euro-office                                (same namespace)
+#   http://euro-office.eurostack                      (other namespaces)
+#   http://euro-office.eurostack.svc.cluster.local    (full name)
+#
+# Nextcloud uses the full name as "DocumentServerInternalUrl" (see 02).
+#
+# Type ClusterIP (the default) is only reachable INSIDE the cluster.
+# Browsers reach Euro-Office through the Ingress (10) instead.
+#
+# Quick test without the Ingress:
+#   kubectl port-forward -n eurostack svc/euro-office 8080:80
+#   then open http://localhost:8080/healthcheck  -> should show "true"
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: euro-office
+  namespace: eurostack
+  labels:
+    app: euro-office
+spec:
+  type: ClusterIP
+  selector:
+    app: euro-office      # Matches the Pod label in 06.
+  ports:
+    - name: http
+      port: 80            # Port on the Service.
+      targetPort: http    # Named port on the container (80, from 06).

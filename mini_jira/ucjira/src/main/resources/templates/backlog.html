@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${project.name} + ' backlog')}"></head>
+<body>
+<header th:replace="~{fragments :: topNav}"></header>
+<main class="wide">
+    <div class="title-row">
+        <h1><span class="muted" th:text="${project.key}">DEMO</span> <span th:text="${project.name}">Demo</span></h1>
+        <a class="btn primary" th:href="@{/projects/{k}/issues/new(k=${project.key})}">+ Create issue</a>
+    </div>
+    <nav th:replace="~{fragments :: projectTabs(${project}, 'backlog')}"></nav>
+    <p class="muted small">Drag issues between sprints and the backlog to plan, or use the dropdown on each row.</p>
+
+    <div data-dnd-root data-dnd-from="backlog">
+        <section class="sprint" th:each="v : ${sprintViews}" th:classappend="${v.sprint.status.name() == 'ACTIVE'} ? 'active'"
+                 data-drop-name="sprintId" th:data-drop-value="${v.sprint.id}">
+            <div class="sprint-head">
+                <div>
+                    <h3>
+                        <span th:text="${v.sprint.name}">Sprint 1</span>
+                        <span th:replace="~{fragments :: sprintStatus(${v.sprint.status})}"></span>
+                    </h3>
+                    <div class="muted small">
+                        <th:block th:if="${v.sprint.startDate != null or v.sprint.endDate != null}"
+                                  th:text="(${v.sprint.startDate} ?: '?') + ' → ' + (${v.sprint.endDate} ?: '?') + ' · '"></th:block>
+                        <span th:text="${#lists.size(v.issues)} + ' issues · ' + ${v.points} + ' points'">0 issues</span>
+                        <span th:if="${v.sprint.status.name() == 'ACTIVE'}" th:text="' (' + ${v.donePoints} + ' done)'"></span>
+                    </div>
+                    <div class="goal" th:if="${v.sprint.goal}" th:text="${v.sprint.goal}">Goal</div>
+                </div>
+                <div class="actions">
+                    <form th:if="${v.sprint.status.name() == 'PLANNED' and activeSprint == null}"
+                          th:action="@{/sprints/{id}/start(id=${v.sprint.id})}" method="post" class="inline">
+                        <button class="btn primary">Start sprint</button>
+                    </form>
+                    <form th:if="${v.sprint.status.name() == 'PLANNED'}" th:action="@{/sprints/{id}/delete(id=${v.sprint.id})}"
+                          method="post" class="inline" onsubmit="return confirm('Delete this sprint? Its issues go back to the backlog.')">
+                        <button class="btn">Delete</button>
+                    </form>
+                    <form th:if="${v.sprint.status.name() == 'ACTIVE'}" th:action="@{/sprints/{id}/complete(id=${v.sprint.id})}"
+                          method="post" class="inline complete-form">
+                        <label class="small">Unfinished issues to
+                            <select name="moveTo">
+                                <option value="">Backlog</option>
+                                <option th:each="p : ${plannedSprints}" th:value="${p.id}" th:text="${p.name}"></option>
+                            </select>
+                        </label>
+                        <button class="btn primary">Complete sprint</button>
+                    </form>
+                </div>
+            </div>
+            <ul class="issue-list drop-list">
+                <th:block th:each="i : ${v.issues}"><li th:replace="~{fragments :: backlogRow(${i})}"></li></th:block>
+            </ul>
+            <p class="empty-hint" th:if="${#lists.isEmpty(v.issues)}">Drag issues here to plan this sprint.</p>
+        </section>
+
+        <section class="sprint backlog" data-drop-name="sprintId" data-drop-value="">
+            <div class="sprint-head">
+                <div>
+                    <h3>Backlog</h3>
+                    <div class="muted small" th:text="${#lists.size(backlog)} + ' issues · ' + ${backlogPoints} + ' points'">0 issues</div>
+                </div>
+            </div>
+            <ul class="issue-list drop-list">
+                <th:block th:each="i : ${backlog}"><li th:replace="~{fragments :: backlogRow(${i})}"></li></th:block>
+            </ul>
+            <p class="empty-hint" th:if="${#lists.isEmpty(backlog)}">The backlog is empty.</p>
+        </section>
+    </div>
+
+    <h2>Create sprint</h2>
+    <form th:action="@{/projects/{k}/sprints(k=${project.key})}" th:object="${form}" method="post" class="card form">
+        <div class="row">
+            <label class="grow">Name
+                <input th:field="*{name}" placeholder="Leave empty for an automatic name" maxlength="100">
+            </label>
+            <label>Start date <input type="date" th:field="*{startDate}"></label>
+            <label>End date
+                <input type="date" th:field="*{endDate}">
+                <span class="field-error" th:errors="*{endDate}"></span>
+            </label>
+        </div>
+        <label>Sprint goal <input th:field="*{goal}" maxlength="500" placeholder="What should this sprint achieve?"></label>
+        <button type="submit" class="btn primary">Create sprint</button>
+    </form>
+
+    <details th:unless="${#lists.isEmpty(completedSprints)}" class="completed">
+        <summary th:text="'Completed sprints (' + ${#lists.size(completedSprints)} + ')'">Completed sprints</summary>
+        <ul>
+            <li th:each="s : ${completedSprints}">
+                <strong th:text="${s.name}">Sprint</strong>
+                <span class="muted" th:text="(${s.startDate} ?: '?') + ' → ' + (${s.endDate} ?: '?')"></span>
+                <span th:if="${s.goal}" th:text="'– ' + ${s.goal}"></span>
+            </li>
+        </ul>
+    </details>
+</main>
+<footer th:replace="~{fragments :: footer}"></footer>
+<script th:src="@{/js/dnd.js}"></script>
+</body>
+</html>

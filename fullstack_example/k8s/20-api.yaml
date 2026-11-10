@@ -1,0 +1,85 @@
+# Go API deployment: connects to MySQL and serves /api with health probes.
+apiVersion: apps/v1
+kind: Deployment  # runs and keeps the Go API pod alive, restarting it if it fails
+metadata:
+  name: api
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # distroless "nonroot" user; numeric id is required for runAsNonRoot verification
+        runAsUser: 65532
+        runAsGroup: 65532
+      containers:
+        - name: api
+          image: k8sexp-api
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: "mysql"
+            - name: DB_PORT
+              value: "3306"
+            - name: API_PORT
+              value: "8080"
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_DATABASE
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+# Internal-only (ClusterIP) service so nginx can reach the API at api:8080.
+apiVersion: v1
+kind: Service  # gives the API a stable internal DNS name and port inside the cluster
+metadata:
+  name: api
+  namespace: app
+spec:
+  type: ClusterIP
+  selector:
+    app: api
+  ports:
+    - port: 8080
+      targetPort: 8080
